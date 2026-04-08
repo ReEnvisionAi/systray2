@@ -241,7 +241,7 @@ func buildPodmanRunCommandArgs() []string {
 		"--inference_max_length", "136192",
 		"--port", strconv.FormatUint(Port, 10),
 		"--max_alloc_timeout", "6000",
-		"--quant_type", "nf4",
+		"--quantization", "int4_weight_only",
 		"--attn_cache_tokens", "128000",
 		appConfig.ModelName,
 		"--token", appConfig.Token,
