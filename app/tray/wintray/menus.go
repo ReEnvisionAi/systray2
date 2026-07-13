@@ -23,6 +23,9 @@ const (
 	diagLogsMenuID
 	diagSeparatorMenuID
 	quitMenuID
+	modeSeparatorMenuID
+	modePrivateMenuID
+	modeDistributedMenuID
 )
 
 func (t *winTray) initMenus() error {
@@ -33,6 +36,15 @@ func (t *winTray) initMenus() error {
 		return fmt.Errorf("unable to create menu entries %w", err)
 	}
 	if err := t.addOrUpdateMenuItem(quitMenuID, 0, quitMenuTitle, false); err != nil {
+		return fmt.Errorf("unable to create menu entries %w", err)
+	}
+	if err := t.addSeparatorMenuItem(modeSeparatorMenuID, 0); err != nil {
+		return fmt.Errorf("unable to create menu entries %w", err)
+	}
+	if err := t.addOrUpdateMenuItem(modeDistributedMenuID, 0, modeDistributedMenuTitle, false); err != nil {
+		return fmt.Errorf("unable to create menu entries %w", err)
+	}
+	if err := t.addOrUpdateMenuItem(modePrivateMenuID, 0, modePrivateMenuTitle, false); err != nil {
 		return fmt.Errorf("unable to create menu entries %w", err)
 	}
 	if err := t.addOrUpdateMenuItem(stopMenuID, 0, stopContainerTitle, true); err != nil {
@@ -108,6 +120,25 @@ func (t *winTray) SetStarted() error {
 	}
 	return nil
 
+}
+
+// SetInferenceMode updates the mode menu items to reflect the active mode:
+// the active entry gets a check prefix and is disabled (nothing to switch to).
+func (t *winTray) SetInferenceMode(mode string) error {
+	privTitle, distTitle := modePrivateMenuTitle, modeDistributedMenuTitle
+	privActive := mode == "private"
+	if privActive {
+		privTitle = "✓ " + privTitle
+	} else {
+		distTitle = "✓ " + distTitle
+	}
+	if err := t.addOrUpdateMenuItem(modePrivateMenuID, 0, privTitle, privActive); err != nil {
+		return fmt.Errorf("unable to update mode menu entries %w", err)
+	}
+	if err := t.addOrUpdateMenuItem(modeDistributedMenuID, 0, distTitle, !privActive); err != nil {
+		return fmt.Errorf("unable to update mode menu entries %w", err)
+	}
+	return nil
 }
 
 func (t *winTray) SetStopped() error {

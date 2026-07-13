@@ -249,6 +249,14 @@ func buildPodmanRunCommandArgs() []string {
 		//"--initial_peers", appConfig.InitialPeers,
 	)
 
+	if appConfig.InferenceMode == InferenceModePrivate {
+		// Private mode: run an isolated swarm. The node hosts the full model
+		// for this machine only — it never dials public bootstrap peers and
+		// no inference traffic leaves the box.
+		slog.Info("Private inference mode: starting isolated swarm (no public peers)")
+		args = append(args, "--new_swarm", "--skip_reachability_check")
+	}
+
 	return args
 }
 

@@ -14,4 +14,6 @@ const (
 	diagLogsMenuTitle        = "View logs"
 	startContainerTitle      = "Start"
 	stopContainerTitle       = "Stop"
+	modePrivateMenuTitle     = "Private (local only)"
+	modeDistributedMenuTitle = "Distributed (grid)"
 )

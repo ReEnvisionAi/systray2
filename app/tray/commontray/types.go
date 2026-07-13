@@ -9,12 +9,14 @@ var (
 )
 
 type Callbacks struct {
-	Quit           chan struct{}
-	Update         chan struct{}
-	DoFirstUse     chan struct{}
-	ShowLogs       chan struct{}
-	StartContainer chan struct{}
-	StopContainer  chan struct{}
+	Quit               chan struct{}
+	Update             chan struct{}
+	DoFirstUse         chan struct{}
+	ShowLogs           chan struct{}
+	StartContainer     chan struct{}
+	StopContainer      chan struct{}
+	SetModePrivate     chan struct{}
+	SetModeDistributed chan struct{}
 }
 
 type ReaiTray interface {
@@ -25,5 +27,6 @@ type ReaiTray interface {
 	ChangeStatusText(text string) error
 	SetStarted() error
 	SetStopped() error
+	SetInferenceMode(mode string) error
 	Quit()
 }
