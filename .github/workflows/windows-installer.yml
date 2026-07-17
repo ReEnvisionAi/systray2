@@ -51,6 +51,8 @@ jobs:
 
       - name: Build app + installer
         shell: pwsh
+        env:
+          SKIP_SIGNING: "1"  # no code-signing cert on CI yet (needs the MsSign tool + secret)
         run: powershell -ExecutionPolicy Bypass -File .\scripts\build_windows.ps1
 
       - name: Verify outputs

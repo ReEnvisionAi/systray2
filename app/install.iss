@@ -58,8 +58,13 @@ DisableWelcomePage=yes
 
 SetupMutex=Global\ReEnvisionSetupMutex
 
+; Signing requires the "MsSign" tool configured in Inno Setup (local dev
+; machines). CI passes /DSKIP_SIGNING to build unsigned artifacts until a
+; code-signing certificate is available as a repository secret.
+#ifndef SKIP_SIGNING
 SignTool=MsSign $f
 SignedUninstaller=yes
+#endif
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

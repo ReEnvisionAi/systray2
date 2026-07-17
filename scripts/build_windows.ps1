@@ -78,7 +78,12 @@ function buildInstaller() {
   set-location "${script:SRC_DIR}\app"
   $env:PKG_VERSION = $script:PKG_VERSION
   Set-Location "${script:SRC_DIR}\app"
-  & "${script:INNO_SETUP_DIR}\ISCC.exe" .\install.iss
+  $isccArgs = @(".\install.iss")
+  if ($env:SKIP_SIGNING -eq "1") {
+    write-host "SKIP_SIGNING=1 - building unsigned installer"
+    $isccArgs = @("/DSKIP_SIGNING") + $isccArgs
+  }
+  & "${script:INNO_SETUP_DIR}\ISCC.exe" @isccArgs
 
   if ($LASTEXITCODE -ne 0) {
     exit($LASTEXITCODE)
