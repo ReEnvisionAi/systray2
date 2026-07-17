@@ -206,6 +206,15 @@ func StopContainer(ctx context.Context) error {
 
 func buildPodmanRunCommandArgs() []string {
 
+	// Private mode with an API image configured: run the agentgrid-api
+	// container instead of the block server. The API loads the full model
+	// in-process (ENABLED_INFERENCE_MODES=private) and serves an
+	// OpenAI-compatible chat endpoint on localhost only — a complete
+	// private AI stack with no swarm participation.
+	if appConfig.InferenceMode == InferenceModePrivate && appConfig.APIContainerImage != "" {
+		return buildPrivateAPIRunCommandArgs()
+	}
+
 	// Base arguments
 	args := []string{
 		"run",
@@ -250,13 +259,48 @@ func buildPodmanRunCommandArgs() []string {
 	)
 
 	if appConfig.InferenceMode == InferenceModePrivate {
-		// Private mode: run an isolated swarm. The node hosts the full model
-		// for this machine only — it never dials public bootstrap peers and
-		// no inference traffic leaves the box.
+		// Private mode without an API image: fall back to an isolated swarm.
+		// The node hosts the full model for this machine only — it never
+		// dials public bootstrap peers and no inference traffic leaves the box.
 		slog.Info("Private inference mode: starting isolated swarm (no public peers)")
 		args = append(args, "--new_swarm", "--skip_reachability_check")
 	}
 
+	return args
+}
+
+// buildPrivateAPIRunCommandArgs builds the podman command for private chat
+// mode: the agentgrid-api container with the model loaded in-process. The
+// chat endpoint binds to 127.0.0.1 only, so nothing is reachable from the
+// network. Reuses the same container name as the block server so the
+// existing start/stop/restart lifecycle applies unchanged (only one of the
+// two containers ever runs at a time).
+func buildPrivateAPIRunCommandArgs() []string {
+	slog.Info(
+		"Private inference mode: starting local chat API container",
+		"image", appConfig.APIContainerImage,
+		"port", appConfig.APIPort,
+	)
+	args := []string{
+		"run",
+		"--rm",
+		"--name=" + appConfig.ContainerName,
+		"--volume=" + podmanVolumeName, // shared HF model cache with the block server
+		"--pull=newer",
+		"-p", fmt.Sprintf("127.0.0.1:%d:5000", appConfig.APIPort),
+		"-e", "ENABLED_INFERENCE_MODES=private",
+		"-e", "ACTIVE_MODEL=" + appConfig.ModelName,
+		"-e", "HUGGING_FACE_HUB_TOKEN=" + appConfig.Token,
+	}
+
+	if appConfig.UseGPU {
+		slog.Info("Adding GPU arguments to podman run command.")
+		args = append(args, "--device=nvidia.com/gpu=all")
+		args = append(args, "--privileged")
+		args = append(args, "--ipc=host")
+	}
+
+	args = append(args, appConfig.APIContainerImage)
 	return args
 }
 
