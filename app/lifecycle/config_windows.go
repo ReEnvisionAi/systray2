@@ -23,6 +23,11 @@ type AppConfig struct {
 	DefaultPort     uint64 `json:"default_port"`
 	UseGPU          bool   `json:"use_gpu"`
 	InferenceMode   string `json:"inference_mode"` // "distributed" (default) or "private"
+	// Optional agentgrid-api image. When set and InferenceMode is "private",
+	// the tray runs this API container (full model in-process, chat endpoint
+	// on localhost) instead of the block-server container.
+	APIContainerImage string `json:"api_container_image"`
+	APIPort           uint64 `json:"api_port"` // localhost port for the private chat API (default 5000)
 	SupabaseURL     string `json:"supabaseUrl"`
 	SupabaseAnonKey string `json:"supabaseAnonKey"`
 	Token           string // Loaded separately from Credential Manager
@@ -170,6 +175,10 @@ func loadAppConfig(filePath string) (AppConfig, error) {
 	default:
 		slog.Warn("Unknown inference_mode in config, falling back to distributed", "value", cfg.InferenceMode)
 		cfg.InferenceMode = InferenceModeDistributed
+	}
+
+	if cfg.APIPort == 0 {
+		cfg.APIPort = 5000
 	}
 
 	// --- Load Token from Windows Credential Manager ---
