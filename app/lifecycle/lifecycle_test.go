@@ -29,17 +29,20 @@ func (m *mockTray) ChangeStatusText(text string) error {
 }
 func (m *mockTray) SetStarted() error   { m.started = true; return nil }
 func (m *mockTray) SetStopped() error   { m.started = false; return nil }
+func (m *mockTray) SetInferenceMode(mode string) error { return nil }
 func (m *mockTray) DisplayFirstUseNotification() error { return nil }
 
 func setupMockTray() *mockTray {
 	mt := &mockTray{
 		callbacks: commontray.Callbacks{
-			Quit:           make(chan struct{}, 1),
-			Update:         make(chan struct{}, 1),
-			DoFirstUse:     make(chan struct{}, 1),
-			ShowLogs:       make(chan struct{}, 1),
-			StartContainer: make(chan struct{}, 1),
-			StopContainer:  make(chan struct{}, 1),
+			Quit:               make(chan struct{}, 1),
+			Update:             make(chan struct{}, 1),
+			DoFirstUse:         make(chan struct{}, 1),
+			ShowLogs:           make(chan struct{}, 1),
+			StartContainer:     make(chan struct{}, 1),
+			StopContainer:      make(chan struct{}, 1),
+			SetModePrivate:     make(chan struct{}, 1),
+			SetModeDistributed: make(chan struct{}, 1),
 		},
 	}
 	t = mt // Set the global tray variable

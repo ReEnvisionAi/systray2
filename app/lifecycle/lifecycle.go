@@ -110,6 +110,10 @@ func Run() {
 				// Stop the container
 				slog.Info("Stopping container")
 				handleStopRequest()
+			case <-callbacks.SetModePrivate:
+				handleModeChange(InferenceModePrivate)
+			case <-callbacks.SetModeDistributed:
+				handleModeChange(InferenceModeDistributed)
 			case <-callbacks.DoFirstUse:
 				err := GetStarted()
 				if err != nil {
@@ -124,6 +128,16 @@ func Run() {
 			}
 		}
 	}()
+
+	// Reflect the configured inference mode in the tray menu. Config load can
+	// fail on first run (missing credential); the menu then keeps its default.
+	if cfg, err := LoadConfig(); err == nil {
+		if err := t.SetInferenceMode(cfg.InferenceMode); err != nil {
+			slog.Warn("Failed to set inference mode menu state", "error", err)
+		}
+	} else {
+		slog.Warn("Could not load config for mode menu init", "error", err)
+	}
 
 	// Are we first use?
 	if !store.GetFirstTimeRun() {
@@ -193,6 +207,33 @@ func handleStopRequest() {
 		// Consider showing an error message
 	} else {
 		SetState(StateStopped) // Explicitly set to stopped on successful stop
+	}
+}
+
+// handleModeChange persists the selected inference mode, updates the tray
+// menu, and restarts the container (if running) so the new mode's server
+// flags take effect. StartContainer re-reads config.json, so the persisted
+// mode is picked up automatically.
+func handleModeChange(mode string) {
+	slog.Info("Switching inference mode", "mode", mode)
+
+	if err := SaveInferenceMode(mode); err != nil {
+		slog.Error("Failed to persist inference mode", "error", err)
+		return
+	}
+
+	if err := t.SetInferenceMode(mode); err != nil {
+		slog.Warn("Failed to update inference mode menu state", "error", err)
+	}
+
+	stateMu.Lock()
+	running := currentState == StateRunning || currentState == StateStarting
+	stateMu.Unlock()
+
+	if running {
+		slog.Info("Restarting container to apply new inference mode")
+		handleStopRequest()
+		handleStartRequest()
 	}
 }
 

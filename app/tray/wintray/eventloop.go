@@ -104,6 +104,20 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 			default:
 				slog.Error("no listener on StopContainer")
 			}
+		case modePrivateMenuID:
+			select {
+			case t.callbacks.SetModePrivate <- struct{}{}:
+			// should not happen but in case not listening
+			default:
+				slog.Error("no listener on SetModePrivate")
+			}
+		case modeDistributedMenuID:
+			select {
+			case t.callbacks.SetModeDistributed <- struct{}{}:
+			// should not happen but in case not listening
+			default:
+				slog.Error("no listener on SetModeDistributed")
+			}
 		default:
 			slog.Debug("Unexpected menu item id", "id", menuItemId)
 		}

@@ -5,6 +5,7 @@
   "model_name": "nvidia/Llama-3_3-Nemotron-Super-49B-v1_5",
   "default_port": 31330,
   "use_gpu": true,
+  "inference_mode": "distributed",
   "supabaseUrl": "https://gmeujceuwsdpsvcpytnv.supabase.co",
   "supabaseAnonKey": "SC07W0x1p7FmSK2xVSLWMOw/8EqJLv9fBAVclMq5NJOixipCUf4QO3wrPtrQVM8eyjzcpZM3iKD/LXErVFcotC9FKpnHEo+SEvAD1cfgcqZszbCPEBsyctL7jd6HFC73MDo/NG2rkemcxXM7OkWWUlgWYvb6F9/8H/bZoGOloIdiyV2zMAPY7OyTxkGmDBNnEIqaEOj2HkiU1DNrPzeqZ2JsWAfJf5qbQwd7oxcDnytrFHHsPpl3dc+iGRcROY3NJNORRZWIPjdCF8u4Cx93E9aNXKw9DV+/AWQ/a0dMWdlGsg/W4icZgv0mKW0="
 }

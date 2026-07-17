@@ -22,6 +22,7 @@ type AppConfig struct {
 	ModelName       string `json:"model_name"`
 	DefaultPort     uint64 `json:"default_port"`
 	UseGPU          bool   `json:"use_gpu"`
+	InferenceMode   string `json:"inference_mode"` // "distributed" (default) or "private"
 	SupabaseURL     string `json:"supabaseUrl"`
 	SupabaseAnonKey string `json:"supabaseAnonKey"`
 	Token           string // Loaded separately from Credential Manager
@@ -36,24 +37,69 @@ const (
 	configFileName    = "config.json"
 	registryKeyPath   = `SOFTWARE\ReEnvisionAI\ReEnvisionAI`
 	registryPortValue = "Port"
+
+	// Inference modes: how the local AgentGrid node participates.
+	//   distributed — joins the public swarm and serves blocks to everyone.
+	//   private     — isolated swarm; the full model runs for this machine
+	//                 only and no inference traffic leaves the box.
+	InferenceModeDistributed = "distributed"
+	InferenceModePrivate     = "private"
 )
 
-func LoadConfig() (AppConfig, error) {
+// SaveInferenceMode persists the chosen inference mode back to config.json so
+// it survives restarts. The file is read/written as a generic map to preserve
+// any fields this app version doesn't know about; the HF token is never
+// written (it lives in Windows Credential Manager).
+func SaveInferenceMode(mode string) error {
+	if mode != InferenceModeDistributed && mode != InferenceModePrivate {
+		return fmt.Errorf("invalid inference mode %q", mode)
+	}
+	configFile, err := configFilePath()
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("failed to read config file %q: %w", configFile, err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("failed to parse config file %q: %w", configFile, err)
+	}
+	raw["inference_mode"] = mode
+	out, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to encode config: %w", err)
+	}
+	if err := os.WriteFile(configFile, out, 0640); err != nil {
+		return fmt.Errorf("failed to write config file %q: %w", configFile, err)
+	}
+	slog.Info("Inference mode saved", "mode", mode)
+	return nil
+}
+
+func configFilePath() (string, error) {
 	configDir, err := os.UserCacheDir()
 	if err != nil {
 		slog.Warn("Failed to get user cache directory, falling back to working directory", "error", err)
 		configDir, err = os.Getwd()
 		if err != nil {
-			return AppConfig{}, fmt.Errorf("cann ot determine config directory: %w", err)
+			return "", fmt.Errorf("cannot determine config directory: %w", err)
 		}
 	} else {
 		configDir = filepath.Join(configDir, configDirName)
 		if err := os.MkdirAll(configDir, 0750); err != nil {
-			return AppConfig{}, fmt.Errorf("failed to create config directory %q: %w", configDir, err)
+			return "", fmt.Errorf("failed to create config directory %q: %w", configDir, err)
 		}
 	}
+	return filepath.Join(configDir, configFileName), nil
+}
 
-	configFile := filepath.Join(configDir, configFileName)
+func LoadConfig() (AppConfig, error) {
+	configFile, err := configFilePath()
+	if err != nil {
+		return AppConfig{}, err
+	}
 	slog.Info("Using configuration file", "path", configFile)
 
 	appConfig, err := loadAppConfig(configFile)
@@ -114,6 +160,16 @@ func loadAppConfig(filePath string) (AppConfig, error) {
 	if cfg.DefaultPort == 0 {
 		slog.Warn("DefaultPort is zero in config, using fallback 31330", "filePath", filePath)
 		cfg.DefaultPort = 31330 // Provide a default fallback
+	}
+
+	switch cfg.InferenceMode {
+	case InferenceModeDistributed, InferenceModePrivate:
+		// valid, keep as-is
+	case "":
+		cfg.InferenceMode = InferenceModeDistributed
+	default:
+		slog.Warn("Unknown inference_mode in config, falling back to distributed", "value", cfg.InferenceMode)
+		cfg.InferenceMode = InferenceModeDistributed
 	}
 
 	// --- Load Token from Windows Credential Manager ---

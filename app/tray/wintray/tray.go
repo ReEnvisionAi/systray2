@@ -61,6 +61,8 @@ func InitTray(icon, updateIcon []byte) (*winTray, error) {
 	wt.callbacks.DoFirstUse = make(chan struct{})
 	wt.callbacks.StartContainer = make(chan struct{})
 	wt.callbacks.StopContainer = make(chan struct{})
+	wt.callbacks.SetModePrivate = make(chan struct{})
+	wt.callbacks.SetModeDistributed = make(chan struct{})
 	wt.normalIcon = icon
 	wt.updateIcon = updateIcon
 	if err := wt.initInstance(); err != nil {
