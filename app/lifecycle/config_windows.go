@@ -30,6 +30,16 @@ type AppConfig struct {
 	APIPort           uint64 `json:"api_port"` // localhost port for the private chat API (default 5000)
 	SupabaseURL     string `json:"supabaseUrl"`
 	SupabaseAnonKey string `json:"supabaseAnonKey"`
+	// Server quantization for distributed mode ("nf4" when empty).
+	QuantType string `json:"quant_type"`
+	// Central model assignment (Supabase grid_nodes). Pair by setting
+	// grid_user_id + grid_pairing_secret (minted in AgentOS); the poller
+	// swaps the secret for grid_refresh_token on first contact.
+	GridUserID        string `json:"grid_user_id"`
+	GridDeviceID      string `json:"grid_device_id"`
+	GridPairingSecret string `json:"grid_pairing_secret"`
+	GridRefreshToken  string `json:"grid_refresh_token"`
+	FollowAssignment  bool   `json:"follow_assignment"`
 	Token           string // Loaded separately from Credential Manager
 }
 
@@ -52,13 +62,23 @@ const (
 )
 
 // SaveInferenceMode persists the chosen inference mode back to config.json so
-// it survives restarts. The file is read/written as a generic map to preserve
-// any fields this app version doesn't know about; the HF token is never
-// written (it lives in Windows Credential Manager).
+// it survives restarts.
 func SaveInferenceMode(mode string) error {
 	if mode != InferenceModeDistributed && mode != InferenceModePrivate {
 		return fmt.Errorf("invalid inference mode %q", mode)
 	}
+	if err := saveConfigValues(map[string]any{"inference_mode": mode}); err != nil {
+		return err
+	}
+	slog.Info("Inference mode saved", "mode", mode)
+	return nil
+}
+
+// saveConfigValues merges the given values into config.json. The file is
+// read/written as a generic map to preserve any fields this app version
+// doesn't know about; the HF token is never written (it lives in Windows
+// Credential Manager).
+func saveConfigValues(values map[string]any) error {
 	configFile, err := configFilePath()
 	if err != nil {
 		return err
@@ -71,7 +91,9 @@ func SaveInferenceMode(mode string) error {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return fmt.Errorf("failed to parse config file %q: %w", configFile, err)
 	}
-	raw["inference_mode"] = mode
+	for k, v := range values {
+		raw[k] = v
+	}
 	out, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to encode config: %w", err)
@@ -79,7 +101,6 @@ func SaveInferenceMode(mode string) error {
 	if err := os.WriteFile(configFile, out, 0640); err != nil {
 		return fmt.Errorf("failed to write config file %q: %w", configFile, err)
 	}
-	slog.Info("Inference mode saved", "mode", mode)
 	return nil
 }
 

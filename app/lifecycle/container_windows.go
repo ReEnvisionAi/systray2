@@ -20,6 +20,8 @@ const (
 	podmanMachineStartTimeout = 5 * time.Minute
 	podmanInfoPollInterval    = 5 * time.Second
 	podmanStopTimeout         = 30 * time.Second
+	agentGridVersion          = "1.6.0"
+	defaultQuantType          = "nf4"
 )
 
 var (
@@ -223,7 +225,7 @@ func buildPodmanRunCommandArgs() []string {
 		"--name=" + appConfig.ContainerName,
 		"--volume=" + podmanVolumeName, // Mount cache volume
 		"--pull=newer",                 // Pulls newer image even if same version
-		"-e AGENT_GRID_VERSION=1.6.0",
+		"-e AGENT_GRID_VERSION=" + agentGridVersion,
 	}
 
 	// GPU arguments - Use CDI if available, requires Podman >= 4.x
@@ -243,6 +245,11 @@ func buildPodmanRunCommandArgs() []string {
 		slog.Info("GPU arguments omitted based on configuration.")
 	}
 
+	quantType := appConfig.QuantType
+	if quantType == "" {
+		quantType = defaultQuantType
+	}
+
 	// Add image and command parts
 	args = append(args, appConfig.ContainerImage) // The image name
 	args = append(args,                           // The command and its arguments within the container
@@ -250,7 +257,7 @@ func buildPodmanRunCommandArgs() []string {
 		"--inference_max_length", "136192",
 		"--port", strconv.FormatUint(Port, 10),
 		"--max_alloc_timeout", "6000",
-		"--quant_type", "nf4",
+		"--quant_type", quantType,
 		"--attn_cache_tokens", "128000",
 		appConfig.ModelName,
 		"--token", appConfig.Token,
