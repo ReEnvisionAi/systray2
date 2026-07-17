@@ -65,6 +65,17 @@ function gatherDistributables() {
     $dest = Join-Path -Path "${script:SRC_DIR}\dist\windows" -ChildPath $_.Name
     Copy-Item -Path $_.FullName -Destination $dest -Force
   }
+
+  # The installer bundles the Podman setup exe (referenced in install.iss).
+  # It is not committed to the repo — download it when missing (CI, fresh clones).
+  $podmanVersion = "5.4.1"
+  $podmanExe = "${script:SRC_DIR}\dist\windows\podman-$podmanVersion-setup.exe"
+  if (!(Test-Path $podmanExe)) {
+    $podmanUrl = "https://github.com/containers/podman/releases/download/v$podmanVersion/podman-$podmanVersion-setup.exe"
+    write-host "Downloading Podman installer from $podmanUrl"
+    Invoke-WebRequest -Uri $podmanUrl -OutFile $podmanExe
+  }
+
   write-host "Distributables gathered successfully"
 }
 
