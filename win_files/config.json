@@ -9,5 +9,11 @@
   "api_container_image": "ghcr.io/reenvision-ai/agentgrid-api:latest",
   "api_port": 5000,
   "supabaseUrl": "https://gmeujceuwsdpsvcpytnv.supabase.co",
-  "supabaseAnonKey": "SC07W0x1p7FmSK2xVSLWMOw/8EqJLv9fBAVclMq5NJOixipCUf4QO3wrPtrQVM8eyjzcpZM3iKD/LXErVFcotC9FKpnHEo+SEvAD1cfgcqZszbCPEBsyctL7jd6HFC73MDo/NG2rkemcxXM7OkWWUlgWYvb6F9/8H/bZoGOloIdiyV2zMAPY7OyTxkGmDBNnEIqaEOj2HkiU1DNrPzeqZ2JsWAfJf5qbQwd7oxcDnytrFHHsPpl3dc+iGRcROY3NJNORRZWIPjdCF8u4Cx93E9aNXKw9DV+/AWQ/a0dMWdlGsg/W4icZgv0mKW0="
+  "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtZXVqY2V1d3NkcHN2Y3B5dG52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzAyNDE3MzUsImV4cCI6MjA0NTgxNzczNX0.Sewmt744-ZbU-Ww4KIamIdldLULw1DrSbJkdlayhS5g",
+  "quant_type": "nf4",
+  "grid_user_id": "",
+  "grid_device_id": "",
+  "grid_pairing_secret": "",
+  "grid_refresh_token": "",
+  "follow_assignment": false
 }

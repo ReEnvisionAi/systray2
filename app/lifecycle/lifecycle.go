@@ -152,6 +152,7 @@ func Run() {
 	}
 
 	StartBackgroundUpdaterChecker(updaterCtx, t.UpdateAvailable)
+	StartAssignmentPoller(updaterCtx)
 
 	handleStartRequest()
 
