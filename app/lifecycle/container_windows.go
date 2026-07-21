@@ -114,6 +114,7 @@ func StartContainer(ctx context.Context) error {
 
 	slog.Info("Container process started successfully.", "pid", currentCmd.Process.Pid)
 	SetState(StateRunning) // Transition to Running state *after* successful start
+	noteContainerStarted()
 
 	// Goroutine to wait for the command to exit and handle cleanup
 	go func() {
@@ -137,6 +138,7 @@ func StartContainer(ctx context.Context) error {
 				slog.Error("Container process exited unexpectedly.", "error", waitErr)
 				if !isStopping { // Avoid overwriting Stopping state
 					SetState(StateError)
+					scheduleCrashRestart()
 				}
 			} else {
 				slog.Info("Container process exited after cancellation (likely during stop).")

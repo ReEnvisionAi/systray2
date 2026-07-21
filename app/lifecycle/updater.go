@@ -2,6 +2,8 @@ package lifecycle
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +15,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -27,9 +30,42 @@ var (
 	UpdateCheckInterval = 24 * time.Hour
 )
 
+// The update server points us at a binary we then execute — restrict where
+// that binary may come from (and where redirects may land), over HTTPS only.
+var allowedUpdateHosts = map[string]bool{
+	"sociallyshaped.net":                   true,
+	"github.com":                           true,
+	"objects.githubusercontent.com":        true,
+	"release-assets.githubusercontent.com": true,
+}
+
+func validateUpdateURL(u *url.URL) error {
+	if u.Scheme != "https" {
+		return fmt.Errorf("update URL must be https, got %q", u.Scheme)
+	}
+	if !allowedUpdateHosts[u.Hostname()] {
+		return fmt.Errorf("update host %q is not in the allow-list", u.Hostname())
+	}
+	return nil
+}
+
+// updateHTTPClient enforces the allow-list on every redirect hop, not just the
+// initial URL (GitHub release downloads redirect to a storage host).
+var updateHTTPClient = &http.Client{
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("too many redirects")
+		}
+		return validateUpdateURL(req.URL)
+	},
+}
+
 type UpdateResponse struct {
 	UpdateURL     string `json:"url"`
 	UpdateVersion string `json:"version"`
+	// Optional hex SHA-256 of the installer. When absent, the updater falls
+	// back to fetching "<url>.sha256" (published by CI next to the asset).
+	SHA256 string `json:"sha256"`
 }
 
 func IsNewReleaseAvailable(ctx context.Context) (bool, UpdateResponse) {
@@ -95,8 +131,13 @@ func IsNewReleaseAvailable(ctx context.Context) (bool, UpdateResponse) {
 		return false, updateResp
 	}
 
-	if _, err := url.ParseRequestURI(updateResp.UpdateURL); err != nil {
+	parsedUpdateURL, err := url.ParseRequestURI(updateResp.UpdateURL)
+	if err != nil {
 		slog.Warn("malformed response checking for update", "error", fmt.Sprintf("update URL is not a valid URL: %s", err))
+		return false, updateResp
+	}
+	if err := validateUpdateURL(parsedUpdateURL); err != nil {
+		slog.Warn("rejecting update", "error", err, "url", updateResp.UpdateURL)
 		return false, updateResp
 	}
 
@@ -114,7 +155,7 @@ func DownloadNewRelease(ctx context.Context, updateResp UpdateResponse) error {
 		return err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := updateHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("error checking update: %w", err)
 	}
@@ -145,7 +186,7 @@ func DownloadNewRelease(ctx context.Context, updateResp UpdateResponse) error {
 	cleanupOldDownloads()
 
 	req.Method = http.MethodGet
-	resp, err = http.DefaultClient.Do(req)
+	resp, err = updateHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("error checking update: %w", err)
 	}
@@ -171,16 +212,65 @@ func DownloadNewRelease(ctx context.Context, updateResp UpdateResponse) error {
 	}
 	defer fp.Close()
 
-	// Stream the download directly to the file
-	_, err = io.Copy(fp, resp.Body)
+	// Stream the download directly to the file, hashing as we go
+	hasher := sha256.New()
+	_, err = io.Copy(io.MultiWriter(fp, hasher), resp.Body)
 	if err != nil {
 		// Clean up partially downloaded file on error
 		os.Remove(stageFilename)
 		return fmt.Errorf("failed to write update to %s: %w", stageFilename, err)
 	}
+
+	if err := verifyUpdateChecksum(ctx, updateResp, hex.EncodeToString(hasher.Sum(nil))); err != nil {
+		os.Remove(stageFilename)
+		return fmt.Errorf("update integrity check failed: %w", err)
+	}
+
 	slog.Info("new update downloaded " + stageFilename)
 
 	UpdateDownloaded = true
+	return nil
+}
+
+var sha256HexRe = regexp.MustCompile(`\b[0-9a-fA-F]{64}\b`)
+
+// verifyUpdateChecksum compares the downloaded installer's SHA-256 against the
+// expected value: the update response's sha256 field when present, otherwise
+// the "<url>.sha256" file CI publishes next to the release asset. Releases
+// predating the checksum file are allowed through with a loud warning.
+func verifyUpdateChecksum(ctx context.Context, updateResp UpdateResponse, actual string) error {
+	expected := strings.ToLower(strings.TrimSpace(updateResp.SHA256))
+	if expected == "" {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, updateResp.UpdateURL+".sha256", nil)
+		if err != nil {
+			return err
+		}
+		resp, err := updateHTTPClient.Do(req)
+		if err != nil {
+			slog.Warn("Could not fetch update checksum file; accepting unverified update", "error", err)
+			return nil
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			slog.Warn("No checksum published for this update; accepting unverified update",
+				"status", resp.StatusCode)
+			return nil
+		}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if err != nil {
+			return err
+		}
+		expected = strings.ToLower(sha256HexRe.FindString(string(body)))
+		if expected == "" {
+			slog.Warn("Checksum file contained no SHA-256; accepting unverified update")
+			return nil
+		}
+	}
+
+	if actual != expected {
+		return fmt.Errorf("SHA-256 mismatch: got %s, expected %s", actual, expected)
+	}
+	slog.Info("Update checksum verified", "sha256", actual)
 	return nil
 }
 
