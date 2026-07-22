@@ -4,18 +4,13 @@ name: Windows installer
 # relevant PR, and attaches ReEnvisionAISetup.exe to GitHub releases on
 # version tags.
 
+# NOTE: This repo has been consolidated into agent-grid-node/platforms/windows/,
+# which is now the active build + release source for the Windows node. systray2 is
+# kept only as a backup/reference, so this workflow is manual-dispatch-only —
+# automatic PR and tag triggers were removed to avoid double-releasing the same
+# installer from two repos. Cut Windows releases by tagging agent-grid-node.
 on:
   workflow_dispatch:
-  push:
-    tags: ["v*"]
-  pull_request:
-    paths:
-      - "app/**"
-      - "win_files/**"
-      - "go.mod"
-      - "go.sum"
-      - "scripts/build_windows.ps1"
-      - ".github/workflows/windows-installer.yml"
 
 jobs:
   build:
