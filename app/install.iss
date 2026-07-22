@@ -96,7 +96,14 @@ Filename: "Powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File '{tmp}\ws
 
 Filename: "{tmp}\podman-5.4.1-setup.exe"; Parameters: "/quiet"; Flags: shellexec  waituntilterminated; StatusMsg: "Installing Podman, please wait..."; BeforeInstall: SetMarqueeProgress(True); Check: NotAnUpdate
 
+; Only bake in a Hugging Face credential when a token was actually supplied at
+; build time. A shared build-time token is extractable from every installer and
+; exposed here on the cmdkey command line (audit finding): the goal is to stop
+; shipping a shared token and move to per-user HF auth. A tokenless build now
+; installs no credential at all instead of baking in "NO_TOKEN_SPECIFIED".
+#if GetEnv("HF_TOKEN") != ""
 Filename: "{cmd}"; Parameters: "/c cmdkey /generic:ReEnvisionAI/hf_token /user:reai /pass:{#HfToken}"; Flags: runhidden shellexec waituntilterminated
+#endif
 
 Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""ReEnvision AI"""; Flags:  waituntilterminated; Check: NotAnUpdate
 Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""ReEnvision AI"" dir=in action=allow protocol=TCP localport={code:GetPort}"; Flags:  waituntilterminated; StatusMsg: "Setting up firewall rule, please wait..."; AfterInstall: SetMarqueeProgress(False); Check: NotAnUpdate

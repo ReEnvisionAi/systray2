@@ -234,10 +234,38 @@ func DownloadNewRelease(ctx context.Context, updateResp UpdateResponse) error {
 
 var sha256HexRe = regexp.MustCompile(`\b[0-9a-fA-F]{64}\b`)
 
+// allowUnverifiedUpdate reports whether the operator has explicitly opted out of
+// update-integrity enforcement via SYSTRAY_ALLOW_UNVERIFIED_UPDATE. This is an
+// escape hatch for installing releases that predate the checksum file; it is OFF
+// by default because the update payload is an executable we run.
+func allowUnverifiedUpdate() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("SYSTRAY_ALLOW_UNVERIFIED_UPDATE"))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+// unverifiedUpdate fails CLOSED: it refuses the update with an error, unless the
+// operator has explicitly set SYSTRAY_ALLOW_UNVERIFIED_UPDATE, in which case it
+// downgrades to a loud warning and lets the update through (returns nil).
+func unverifiedUpdate(reason string) error {
+	if allowUnverifiedUpdate() {
+		slog.Warn("SECURITY: accepting an UNVERIFIED update because SYSTRAY_ALLOW_UNVERIFIED_UPDATE "+
+			"is set — this executes code with no integrity check", "reason", reason)
+		return nil
+	}
+	return fmt.Errorf("refusing unverified update (%s); set SYSTRAY_ALLOW_UNVERIFIED_UPDATE=1 to override", reason)
+}
+
 // verifyUpdateChecksum compares the downloaded installer's SHA-256 against the
-// expected value: the update response's sha256 field when present, otherwise
-// the "<url>.sha256" file CI publishes next to the release asset. Releases
-// predating the checksum file are allowed through with a loud warning.
+// expected value: the update response's sha256 field when present, otherwise the
+// "<url>.sha256" file CI publishes next to the release asset. If no checksum can
+// be obtained the update is REFUSED (fail closed) — because we execute the
+// payload, and an attacker able to block or spoof the checksum endpoint (served
+// from the same host as the binary) would otherwise achieve code execution on
+// every node. SYSTRAY_ALLOW_UNVERIFIED_UPDATE overrides, for legacy releases.
 func verifyUpdateChecksum(ctx context.Context, updateResp UpdateResponse, actual string) error {
 	expected := strings.ToLower(strings.TrimSpace(updateResp.SHA256))
 	if expected == "" {
@@ -247,14 +275,11 @@ func verifyUpdateChecksum(ctx context.Context, updateResp UpdateResponse, actual
 		}
 		resp, err := updateHTTPClient.Do(req)
 		if err != nil {
-			slog.Warn("Could not fetch update checksum file; accepting unverified update", "error", err)
-			return nil
+			return unverifiedUpdate(fmt.Sprintf("could not fetch update checksum file: %v", err))
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			slog.Warn("No checksum published for this update; accepting unverified update",
-				"status", resp.StatusCode)
-			return nil
+			return unverifiedUpdate(fmt.Sprintf("no checksum published for this update (status %d)", resp.StatusCode))
 		}
 		body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		if err != nil {
@@ -262,8 +287,7 @@ func verifyUpdateChecksum(ctx context.Context, updateResp UpdateResponse, actual
 		}
 		expected = strings.ToLower(sha256HexRe.FindString(string(body)))
 		if expected == "" {
-			slog.Warn("Checksum file contained no SHA-256; accepting unverified update")
-			return nil
+			return unverifiedUpdate("checksum file contained no SHA-256")
 		}
 	}
 
